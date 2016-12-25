@@ -1,0 +1,224 @@
+#!/usr/bin/env python
+# encoding: utf-8
+
+"""
+Author: Rosen
+Mail: rosenluov@gmail.com
+File: es_agent.py
+Created Time: 12/21/16 14:34
+"""
+
+from __future__ import print_function
+
+import json
+import os
+import sys
+import time
+from logging.handlers import TimedRotatingFileHandler
+from multiprocessing import Process, Queue
+
+import requests
+import statsd
+
+from conf.settings import (
+    traps1,
+    traps2,
+    GAUGE,
+    COUNTER,
+    pidfile,
+    stderr,
+    stdout,
+    HOSTNAME,
+    IP,
+    PORT,
+    URL,
+    STATSD_SERVER
+)
+from utils.daemonize import Daemon
+from utils.logging_conf import logging_conf
+
+"""
+    The ElasticSearch-agent collects state information by
+    calling the ElasticSearch API and sends it to StatsD and open-falcon.
+"""
+
+# log setting
+# log_formatter = logging.Formatter('%(asctime)s;%(levelname)s;%(message)s')
+
+# info log
+out_keep = TimedRotatingFileHandler(stdout, 'D', 1, 7)
+# out_keep.setFormatter(log_formatter)
+es_logger_out = logging_conf(stdout).getLogger('es_agent_out')
+es_logger_out.addHandler(out_keep)
+
+# error log
+err_keep = TimedRotatingFileHandler(stderr, 'D', 1, 7)
+# err_keep.setFormatter(log_formatter)
+es_logger_err = logging_conf(stderr).getLogger('es_agent_err')
+es_logger_err.addHandler(err_keep)
+
+q = Queue(10)
+
+
+def es_data(endpoint, metric, timestamp, value, counter_type, tags):
+    structure = {
+        'endpoint': endpoint,
+        'metric': metric,
+        'timestamp': timestamp,
+        'step': 10,
+        'value': value,
+        'counterType': counter_type,
+        'tags': tags
+    }
+    return structure
+
+
+# read specified keys from json data
+def get_keys(stats, traps, ts):
+    stats_data_gauge = {}
+    stats_data_timer = {}
+    tags = ""
+    falcon_data = []
+
+    for key in traps:
+        if key == 'status':
+            value = stats.get(key, '')
+            if value == 'green':
+                stats[key] = 1
+            elif value == 'yellow':
+                stats[key] = 2
+            elif value == 'red':
+                stats[key] = 0
+
+        c = key.split('.')
+        s = stats
+        while len(c):
+            s = s.get(c.pop(0), {})
+
+        if s == {}:
+            continue
+
+        metric = 'es.' + key
+        if key in GAUGE:
+            falcon_data.append(es_data(HOSTNAME, metric, ts, s, 'GAUGE', tags))
+            stats_data_gauge[key] = s
+        elif key in COUNTER:
+            falcon_data.append(es_data(HOSTNAME, metric, ts, s, 'COUNTER', tags))
+            stats_data_timer[key] = s
+
+    return falcon_data, stats_data_gauge, stats_data_timer
+
+
+class MyDaemon(Daemon):
+    @staticmethod
+    def run():
+        es_logger_out.info("Daemon started with pid %d! \n", os.getpid())
+        while True:
+            if int(time.time()) % 10 == 0:
+                p = Process(target=main)
+                p.start()
+                p.join()
+                time.sleep(1)
+
+
+def write_log(out=None, metrics=None):
+    if out is None:
+        out = []
+    if metrics is None:
+        metrics = []
+    es_logger_out.info("Delivery %d metrics %s! \n", metrics, out)
+
+
+def send_to_falcon(url=None, data=None):
+    if data and url:
+        res = requests.post(URL, data=json.dumps(data))
+        return res
+
+
+def send_to_statsd(statsd_client=None, data=None, gauge=False, timer=False):
+    try:
+        if data and gauge:
+            for k, v in data.items():
+                statsd_client.gauge(k, v)
+        if data and timer:
+            for k, v in data.items():
+                statsd_client.timing(k, v)
+            if q.empty():
+                q.put(data)
+    except Exception as e:
+        es_logger_err.error(e.__str__())
+
+
+def timer_to_gauge(data=None):
+    counter_stats_data = {}
+    if not q.empty():
+        old_stats_data = q.get()
+        for k in data:
+            counter_stats_data[k] = (data[k] - old_stats_data[k]) / 10
+        return counter_stats_data
+    else:
+        return data
+
+
+def main():
+    # load json data
+    node = {}
+    try:
+        health_res = requests.get("http://{IP}:{PORT}/_cluster/health".format(IP=IP, PORT=PORT))
+        stats_res = requests.get("http://{IP}:{PORT}/_nodes/_local/stats?all=true".format(IP=IP, PORT=PORT))
+        data_time = int(time.time())
+        health = health_res.json()
+        stats = stats_res.json()
+        # only for current node
+        for node_id in stats.get('nodes', {}).keys():
+            if stats['nodes'][node_id]['host'].startswith(IP):
+                node = stats['nodes'][node_id]
+                if len(sys.argv) == 1:
+                    es_logger_err.error("node found")
+
+    except Exception as e:
+        es_logger_err.error(e.__str__() + "and Unable to load JSON data!")
+        sys.exit(1)
+
+    statsd_client = statsd.StatsClient(STATSD_SERVER['host'], STATSD_SERVER['port'], health['cluster_name'])
+
+    # out = get_keys(health, traps1, data_time)  # getting health values
+    # out.extend(get_keys(node, traps2, data_time))  # getting stats  values
+    falcon_data, stats_data_gauge1, stats_data_timer1 = get_keys(health, traps1, data_time)  # getting health values
+    falcon_data2, stats_data_gauge2, stats_data_timer2 = get_keys(node, traps2, data_time)  # getting stats values
+
+    # converging of metrics
+    falcon_data.extend(falcon_data2)
+    stats_data_gauge = dict(stats_data_gauge1, **stats_data_gauge2)
+    stats_data_timer = dict(stats_data_timer1, **stats_data_timer2)
+    stats_data_timer = timer_to_gauge(stats_data_timer)
+
+    # send metrics to open-falcon
+    res = send_to_falcon(URL, falcon_data)
+
+    # send metrics to StatsD
+    send_to_statsd(statsd_client, stats_data_gauge, gauge=True)
+    send_to_statsd(statsd_client, stats_data_timer, timer=True)
+
+    write_log(res.text, len(falcon_data))
+
+
+if __name__ == "__main__":
+    myDaemon = MyDaemon(pidfile=pidfile,
+                        stdout=stdout,
+                        stderr=stderr)
+    args = sys.argv
+    if len(args) == 2:
+        if 'start' == args[1]:
+            myDaemon.start()
+        elif 'stop' == args[1]:
+            myDaemon.stop()
+        elif 'restart' == args[1]:
+            myDaemon.restart()
+        else:
+            es_logger_err.error('*** Unknown command')
+            sys.exit(2)
+        sys.exit(0)
+    else:
+        print('Usage: {} start|stop|restart'.format(args[0]))
+        sys.exit(2)

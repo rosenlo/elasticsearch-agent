@@ -1,0 +1,15 @@
+[Unit]
+Description=Monitor agent for ElasticSearch
+After=network.target
+
+[Service]
+Type=forking
+WorkingDirectory=/opt/es-agent
+PIDFile=/var/run/elasticsearch/es-agent.pid
+ExecStart=/opt/es_agent/es-agent start
+ExecReload=/opt/es_agent/es-agent restart
+ExecStop=/opt/es_agent/es-agent stop
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
