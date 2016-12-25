@@ -28,9 +28,9 @@ After=network.target
 Type=forking
 WorkingDirectory=/opt/es-agent
 PIDFile=/var/run/elasticsearch/es-agent.pid
-ExecStart=/opt/es_agent/es-agent start
-ExecReload=/opt/es_agent/es-agent restart
-ExecStop=/opt/es_agent/es-agent stop
+ExecStart=/opt/es-agent/es-agent start
+ExecReload=/opt/es-agent/es-agent restart
+ExecStop=/opt/es-agent/es-agent stop
 PrivateTmp=true
 
 [Install]
