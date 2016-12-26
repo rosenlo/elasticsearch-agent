@@ -14,10 +14,9 @@ import atexit
 import os
 import sys
 import time
-from datetime import datetime
 from signal import SIGTERM
 
-from utils.logging_conf import logging_conf
+from utils.common import logging_conf
 
 
 class Daemon(object):
@@ -26,8 +25,8 @@ class Daemon(object):
         self.stdout = stdout
         self.stderr = stderr
         self.pidfile = pidfile
-        self.es_logger_out = logging_conf(stdout).getLogger('es_agent_out')
-        self.es_logger_err = logging_conf(stderr).getLogger('es_agent_err')
+        self.es_logger_out = logging_conf(stdout).getLogger('es-agent_out')
+        self.es_logger_err = logging_conf(stderr).getLogger('es-agent_err')
 
     def _daemonize(self):
         try:
@@ -92,7 +91,7 @@ class Daemon(object):
             pf = open(self.pidfile, 'r')
             pid = int(pf.read().strip())
             pf.close()
-            message = 'es_agent will be stop...\n'
+            message = 'es-agent will be stop...\n'
             self.es_logger_out.info(message)
         except IOError:
             pid = None

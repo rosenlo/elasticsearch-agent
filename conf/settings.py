@@ -8,21 +8,20 @@ File: settings.py
 Created Time: 12/22/16 12:05
 """
 import socket
-from multiprocessing import Pool
+from os import path
 
-multi_pool = Pool(2)
-pidfile = '/run/elasticsearch/es_agent.pid'
+BASE_DIR = path.dirname(path.abspath(__file__))
+pidfile = '/run/elasticsearch/es-agent.pid'
 stdout = '/data/log/elasticsearch/es-agent.log'
 stderr = '/data/log/elasticsearch/es-agent.err'
 HOSTNAME = socket.gethostname()
 IP = socket.gethostbyname(HOSTNAME)
 PORT = 9200
-URL = 'http://127.0.0.1:1988/v1/push'
 
-STATSD_SERVER = {
-    'host': 'statsd.example.com',
-    'port': 8125
-}
+# URL = 'http://127.0.0.1:1988/v1/push'
+
+OPEN_FALCON = BASE_DIR + '/open-falcon'
+STATSD_FILE = BASE_DIR + '/statsd.yaml'
 
 # keys for health page
 traps1 = [

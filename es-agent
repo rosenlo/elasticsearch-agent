@@ -4,7 +4,7 @@
 """
 Author: Rosen
 Mail: rosenluov@gmail.com
-File: es_agent.py
+File: es-agent.py
 Created Time: 12/21/16 14:34
 """
 
@@ -31,11 +31,11 @@ from conf.settings import (
     HOSTNAME,
     IP,
     PORT,
-    URL,
-    STATSD_SERVER
+    STATSD_FILE,
+    OPEN_FALCON
 )
+from utils.common import logging_conf, load_yaml_data
 from utils.daemonize import Daemon
-from utils.logging_conf import logging_conf
 
 """
     The ElasticSearch-agent collects state information by
@@ -48,16 +48,29 @@ from utils.logging_conf import logging_conf
 # info log
 out_keep = TimedRotatingFileHandler(stdout, 'D', 1, 7)
 # out_keep.setFormatter(log_formatter)
-es_logger_out = logging_conf(stdout).getLogger('es_agent_out')
+es_logger_out = logging_conf(stdout).getLogger('es-agent_out')
 es_logger_out.addHandler(out_keep)
 
 # error log
 err_keep = TimedRotatingFileHandler(stderr, 'D', 1, 7)
 # err_keep.setFormatter(log_formatter)
-es_logger_err = logging_conf(stderr).getLogger('es_agent_err')
+es_logger_err = logging_conf(stderr).getLogger('es-agent_err')
 es_logger_err.addHandler(err_keep)
 
 q = Queue(10)
+
+
+def load_statsd_conf(filename=None):
+    data = load_yaml_data(filename)
+    host = data.get('host', '')
+    port = data.get('port', )
+    return host, port
+
+
+def load_falcon_conf(filename=None):
+    data = load_yaml_data(filename)
+    url = data.get('url', '')
+    return url
 
 
 def es_data(endpoint, metric, timestamp, value, counter_type, tags):
@@ -131,7 +144,7 @@ def write_log(out=None, metrics=None):
 
 def send_to_falcon(url=None, data=None):
     if data and url:
-        res = requests.post(URL, data=json.dumps(data))
+        res = requests.post(url, data=json.dumps(data))
         return res
 
 
@@ -180,10 +193,10 @@ def main():
         es_logger_err.error(e.__str__() + "and Unable to load JSON data!")
         sys.exit(1)
 
-    statsd_client = statsd.StatsClient(STATSD_SERVER['host'], STATSD_SERVER['port'], health['cluster_name'])
+    statsd_host, statsd_port = load_statsd_conf(STATSD_FILE)
+    statsd_client = statsd.StatsClient(statsd_host, statsd_port, health['cluster_name'])
 
-    # out = get_keys(health, traps1, data_time)  # getting health values
-    # out.extend(get_keys(node, traps2, data_time))  # getting stats  values
+    # get data of open-falcon and statsd
     falcon_data, stats_data_gauge1, stats_data_timer1 = get_keys(health, traps1, data_time)  # getting health values
     falcon_data2, stats_data_gauge2, stats_data_timer2 = get_keys(node, traps2, data_time)  # getting stats values
 
@@ -194,7 +207,8 @@ def main():
     stats_data_timer = timer_to_gauge(stats_data_timer)
 
     # send metrics to open-falcon
-    res = send_to_falcon(URL, falcon_data)
+    url = load_statsd_conf(OPEN_FALCON)
+    res = send_to_falcon(url, falcon_data)
 
     # send metrics to StatsD
     send_to_statsd(statsd_client, stats_data_gauge, gauge=True)
