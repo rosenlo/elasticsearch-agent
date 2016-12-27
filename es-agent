@@ -32,7 +32,8 @@ from conf.settings import (
     IP,
     PORT,
     STATSD_FILE,
-    OPEN_FALCON
+    OPEN_FALCON,
+    SEC_METRIC
 )
 from utils.common import logging_conf, load_yaml_data
 from utils.daemonize import Daemon
@@ -152,10 +153,12 @@ def send_to_statsd(statsd_client=None, data=None, gauge=False, timer=False):
     try:
         if data and gauge:
             for k, v in data.items():
-                statsd_client.gauge(k, v)
+                metric = HOSTNAME + '.' + k
+                statsd_client.gauge(metric, v)
         if data and timer:
             for k, v in data.items():
-                statsd_client.timing(k, v)
+                metric = HOSTNAME + '.' + k
+                statsd_client.timing(metric, v)
             if q.empty():
                 q.put(data)
     except Exception as e:
@@ -167,18 +170,33 @@ def timer_to_gauge(data=None):
     if not q.empty():
         old_stats_data = q.get()
         for k in data:
-            counter_stats_data[k] = (data[k] - old_stats_data[k]) / 10
+            counter_stats_data[k] = round((data[k] - old_stats_data[k]) / 10, 2)
         return counter_stats_data
     else:
         return data
+
+
+def timer_to_timer_rate(data=None):
+    sec_data = {}
+    if data:
+        for k, v in SEC_METRIC.items():
+            key = k + '.sec'
+            try:
+                sec_data[key] = data[k] / data[v]
+            except ZeroDivisionError:
+                sec_data[key] = 0
+        statsd_data_timer = dict(data, **sec_data)
+        return statsd_data_timer
+    else:
+        es_logger_err.info('No timers data.')
 
 
 def main():
     # load json data
     node = {}
     try:
-        health_res = requests.get("http://{IP}:{PORT}/_cluster/health".format(IP=IP, PORT=PORT))
-        stats_res = requests.get("http://{IP}:{PORT}/_nodes/_local/stats?all=true".format(IP=IP, PORT=PORT))
+        health_res = requests.get("http://{IP}:{PORT}/_cluster/health".format(IP=IP, PORT=PORT), timeout=10)
+        stats_res = requests.get("http://{IP}:{PORT}/_nodes/_local/stats?all=true".format(IP=IP, PORT=PORT), timeout=10)
         data_time = int(time.time())
         health = health_res.json()
         stats = stats_res.json()
@@ -188,6 +206,9 @@ def main():
                 node = stats['nodes'][node_id]
                 if len(sys.argv) == 1:
                     es_logger_err.error("node found")
+    except requests.exceptions.ConnectTimeout as e:
+        es_logger_err.error(e.__str__())
+        sys.exit(1)
 
     except Exception as e:
         es_logger_err.error(e.__str__() + "and Unable to load JSON data!")
@@ -205,9 +226,10 @@ def main():
     stats_data_gauge = dict(stats_data_gauge1, **stats_data_gauge2)
     stats_data_timer = dict(stats_data_timer1, **stats_data_timer2)
     stats_data_timer = timer_to_gauge(stats_data_timer)
+    stats_data_timer = timer_to_timer_rate(stats_data_timer)
 
     # send metrics to open-falcon
-    url = load_statsd_conf(OPEN_FALCON)
+    url = load_falcon_conf(OPEN_FALCON)
     res = send_to_falcon(url, falcon_data)
 
     # send metrics to StatsD

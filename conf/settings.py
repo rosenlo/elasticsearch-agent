@@ -20,7 +20,7 @@ PORT = 9200
 
 # URL = 'http://127.0.0.1:1988/v1/push'
 
-OPEN_FALCON = BASE_DIR + '/open-falcon'
+OPEN_FALCON = BASE_DIR + '/open-falcon.yaml'
 STATSD_FILE = BASE_DIR + '/statsd.yaml'
 
 # keys for health page
@@ -65,7 +65,9 @@ traps2 = {
     "indices.indexing.delete_total",
     "indices.indexing.index_time_in_millis",
     "indices.indexing.index_total",
-    "indices.merges.total",
+    "indices.indexing.index_current",
+    "indices.indexing.index_failed",
+    "indices.merges.total_size_in_bytes",
     "indices.merges.total_time_in_millis",
     "indices.refresh.total",
     "indices.refresh.total_time_in_millis",
@@ -193,7 +195,9 @@ COUNTER = [
     "indices.indexing.delete_total",
     "indices.indexing.index_time_in_millis",
     "indices.indexing.index_total",
-    "indices.merges.total",
+    "indices.indexing.index_current",
+    "indices.indexing.index_failed",
+    "indices.merges.total_size_in_bytes",
     "indices.merges.total_time_in_millis",
     "indices.refresh.total",
     "indices.refresh.total_time_in_millis",
@@ -206,6 +210,20 @@ COUNTER = [
     "indices.warmer.total_time_in_millis",
     "thread_pool.index.completed"
 ]
+
+SEC_METRIC = {
+    "indices.search.query_time_in_millis": "indices.search.query_total",
+    "indices.search.fetch_time_in_millis": "indices.search.fetch_total",
+    "indices.get.exists_time_in_millis": "indices.get.exists_total",
+    "indices.get.missing_time_in_millis": "indices.get.missing_total",
+    "indices.merges.total_size_in_bytes": "indices.merges.total_time_in_millis",
+    "indices.flush.total": "indices.flush.total_time_in_millis",
+    "indices.refresh.total": "indices.refresh.total_time_in_millis",
+    "indices.indexing.index_time_in_millis": "indices.indexing.index_total",
+    "indices.indexing.delete_time_in_millis": "indices.indexing.delete_total",
+    "indices.warmer.total": "indices.warmer.total_time_in_millis",
+
+}
 
 if __name__ == '__main__':
     pass
