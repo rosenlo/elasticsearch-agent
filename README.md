@@ -8,7 +8,7 @@ The ElasticSearch-agent is a flexible and powerful open source, collects state i
 
 
 ### Instructions for running the Elasticsearch agent
-1. Edit `conf/settings.py` and replace it with whatever you want.
+1. Edit `conf/settings.py` and `conf/statsd.yaml` or `conf/open-falcon.yaml` replace it with whatever you want or expand your own services
 2. Agent can be started as a daemon using the following command: `python es-agent start` or `systemctl start es-agent.service`
 3. The daemon can be stopped by running: `python es-agent stop` or `systemctl stop es-agent.service`
 4. The daemon can be restarted by running: `python es-agent restart` or `systemctl restart es-agent.service`
