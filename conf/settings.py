@@ -36,13 +36,19 @@ traps1 = [
 ]
 
 # keys for cluster stats page
-traps2 = {
+traps2 = [
     "thread_pool.index.active",
-    "thread_pool.index.completed",
-    "thread_pool.index.largest",
+    # "thread_pool.index.completed",
+    # "thread_pool.index.largest",
     "thread_pool.index.queue",
     "thread_pool.index.rejected",
     "thread_pool.index.threads",
+    # "thread_pool.search.completed"
+    "thread_pool.search.rejected",
+    "thread_pool.search.active",
+    # "thread_pool.search.largest",
+    "thread_pool.search.queue",
+    "thread_pool.search.threads",
     "http.current_open",
     "http.total_opened",
     "process.cpu.percent",
@@ -98,9 +104,9 @@ traps2 = {
     "jvm.mem.pools.survivor.used_in_bytes",
     "jvm.threads.count",
     "jvm.threads.peak_count",
-    "jvm.gc.collectors.old.ollection_count",
+    "jvm.gc.collectors.old.collection_count",
     "jvm.gc.collectors.old.collection_time_in_millis",
-    "jvm.gc.collectors.young.ollection_count",
+    "jvm.gc.collectors.young.collection_count",
     "jvm.gc.collectors.young.collection_time_in_millis",
     "jvm.buffer_pools.direct.count",
     "jvm.buffer_pools.direct.total_capacity_in_bytes",
@@ -114,8 +120,12 @@ traps2 = {
     "os.mem.free_percent",
     "os.mem.used_percent",
     "os.cpu_percent",
-    "os.load_average"
-}
+    "os.load_average",
+    "transport.rx_size_in_bytes",
+    "transport.rx_count",
+    "transport.tx_size_in_bytes",
+    "transport.tx_count"
+]
 
 GAUGE = [
     "active_primary_shards",
@@ -123,6 +133,7 @@ GAUGE = [
     "status",
     "number_of_data_nodes",
     "number_of_nodes",
+    "unassigned_shards",
     "http.current_open",
     "initializing_shards",
     "jvm.buffer_pools.direct.count",
@@ -131,10 +142,6 @@ GAUGE = [
     "jvm.buffer_pools.mapped.count",
     "jvm.buffer_pools.mapped.total_capacity_in_bytes",
     "jvm.buffer_pools.mapped.used_in_bytes",
-    "jvm.gc.collectors.old.ollection_count",
-    "jvm.gc.collectors.old.collection_time_in_millis",
-    "jvm.gc.collectors.young.collection_time_in_millis",
-    "jvm.gc.collectors.young.ollection_count",
     "jvm.mem.heap_committed_in_bytes",
     "jvm.mem.heap_max_in_bytes",
     "jvm.mem.heap_used_in_bytes",
@@ -172,13 +179,7 @@ GAUGE = [
     "process.mem.share_in_bytes",
     "process.mem.total_virtual_in_bytes",
     "process.open_file_descriptors",
-    "relocating_shards",
-    "thread_pool.index.active",
-    "thread_pool.index.largest",
-    "thread_pool.index.queue",
-    "thread_pool.index.rejected",
-    "thread_pool.index.threads",
-    "unassigned_shards"
+    "relocating_shards"
 ]
 
 COUNTER = [
@@ -208,7 +209,26 @@ COUNTER = [
     "indices.store.throttle_time_in_millis",
     "indices.warmer.total",
     "indices.warmer.total_time_in_millis",
-    "thread_pool.index.completed"
+    # "thread_pool.index.completed"
+    "thread_pool.index.rejected",
+    "thread_pool.index.active",
+    # "thread_pool.index.largest",
+    "thread_pool.index.queue",
+    "thread_pool.index.threads",
+    # "thread_pool.search.completed"
+    "thread_pool.search.rejected",
+    "thread_pool.search.active",
+    # "thread_pool.search.largest",
+    "thread_pool.search.queue",
+    "thread_pool.search.threads",
+    "jvm.gc.collectors.old.collection_count",
+    "jvm.gc.collectors.old.collection_time_in_millis",
+    "jvm.gc.collectors.young.collection_time_in_millis",
+    "jvm.gc.collectors.young.collection_count",
+    "transport.rx_size_in_bytes",
+    "transport.rx_count",
+    "transport.tx_size_in_bytes",
+    "transport.tx_count"
 ]
 
 SEC_METRIC = {
@@ -221,8 +241,7 @@ SEC_METRIC = {
     "indices.refresh.total": "indices.refresh.total_time_in_millis",
     "indices.indexing.index_time_in_millis": "indices.indexing.index_total",
     "indices.indexing.delete_time_in_millis": "indices.indexing.delete_total",
-    "indices.warmer.total": "indices.warmer.total_time_in_millis",
-
+    "indices.warmer.total": "indices.warmer.total_time_in_millis"
 }
 
 if __name__ == '__main__':
