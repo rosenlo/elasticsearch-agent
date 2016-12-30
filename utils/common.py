@@ -23,11 +23,11 @@ def load_yaml_data(filename=None):
         print_exc()
 
 
-def logging_conf(filename='/dev/null', level=logging.INFO):
+def logging_conf(level=logging.INFO):
     logging.basicConfig(level=level,
                         format='%(asctime)s %(filename)s[line:%(lineno)d] %(levelname)s %(message)s',
                         datefmt='%a, %d %b %Y %H:%M:%S',
-                        filename=filename,
+                        # filename=filename,
                         filemode='a+'
                         )
     return logging

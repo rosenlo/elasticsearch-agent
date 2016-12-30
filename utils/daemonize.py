@@ -11,12 +11,11 @@ Created Time: 12/22/16 00:05
 from __future__ import print_function
 
 import atexit
+import logging
 import os
 import sys
 import time
 from signal import SIGTERM
-
-from utils.common import logging_conf
 
 
 class Daemon(object):
@@ -25,8 +24,9 @@ class Daemon(object):
         self.stdout = stdout
         self.stderr = stderr
         self.pidfile = pidfile
-        self.es_logger_out = logging_conf(stdout).getLogger('es-agent_out')
-        self.es_logger_err = logging_conf(stderr).getLogger('es-agent_err')
+        # self.es_logger_out = logging_conf(stdout).getLogger('es-agent_out')
+        # self.es_logger_out = logging_conf(stderr).getLogger('es-agent_err')
+        self.es_logger_out = logging.getLogger(__name__)
 
     def _daemonize(self):
         try:
@@ -34,7 +34,7 @@ class Daemon(object):
             if pid > 0:
                 sys.exit(0)
         except OSError as e:
-            self.es_logger_err.error('For #1 failed: %s  %s \n', (e.errno, e.strerror))
+            self.es_logger_out.error('For #1 failed: %s  %s \n', (e.errno, e.strerror))
             sys.exit(1)
 
         os.chdir("/")  # 修改工作目录
@@ -46,17 +46,18 @@ class Daemon(object):
             if pid > 0:
                 sys.exit(0)
         except OSError as e:
-            self.es_logger_err.error('Fork #2 failed: %s %s\n', (e.errno, e.strerror))
+            self.es_logger_out.error('Fork #2 failed: %s %s\n', (e.errno, e.strerror))
             sys.exit(1)
 
         # 重定向文件描述符
         sys.stdout.flush()
         sys.stderr.flush()
-        si = open(self.stdin, 'r')
+        # si = open(self.stdin, 'r')
         so = open(self.stdout, 'a+')
-        se = open(self.stderr, 'a+', 0)
-        os.dup2(si.fileno(), sys.stdin.fileno())
-        os.dup2(so.fileno(), sys.stdout.fileno())
+        # se = open(self.stderr, 'a+', 0)
+        se = open(self.stderr, 'a+')
+        # os.dup2(si.fileno(), sys.stdin.fileno())
+        # os.dup2(so.fileno(), sys.stdout.fileno())
         os.dup2(se.fileno(), sys.stderr.fileno())
 
         # 注册退出函数，根据文件pid判断是否存在进程
@@ -78,7 +79,7 @@ class Daemon(object):
 
         if pid:
             message = 'pidfile %s already exist. Daemon already running!\n'
-            self.es_logger_err.error(message, self.pidfile)
+            self.es_logger_out.error(message, self.pidfile)
             sys.exit(1)
 
             # 启动监控
@@ -98,7 +99,7 @@ class Daemon(object):
 
         if not pid:  # 重启不报错
             message = 'pid file %s does not exist. Daemon not running!\n'
-            self.es_logger_err.error(message, self.pidfile)
+            self.es_logger_out.error(message, self.pidfile)
             return
 
             # 杀进程
@@ -112,7 +113,7 @@ class Daemon(object):
                 if os.path.exists(self.pidfile):
                     os.remove(self.pidfile)
             else:
-                self.es_logger_err.error(str(err))
+                self.es_logger_out.error(err)
                 sys.exit(1)
 
     def restart(self):

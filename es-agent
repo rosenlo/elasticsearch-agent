@@ -11,11 +11,13 @@ Created Time: 12/21/16 14:34
 from __future__ import print_function
 
 import json
+import logging
 import os
 import sys
 import time
 from logging.handlers import TimedRotatingFileHandler
 from multiprocessing import Process, Queue
+from traceback import print_exc
 
 import requests
 import statsd
@@ -35,7 +37,7 @@ from conf.settings import (
     OPEN_FALCON,
     SEC_METRIC
 )
-from utils.common import logging_conf, load_yaml_data
+from utils.common import load_yaml_data
 from utils.daemonize import Daemon
 
 """
@@ -44,19 +46,15 @@ from utils.daemonize import Daemon
 """
 
 # log setting
-log_formatter = logging.Formatter('%(asctime)s %(filename)s[line:%(lineno)d] %(levelname)s %(message)s')
 
+
+log_formatter = logging.Formatter('%(asctime)s %(name)s: %(filename)s[line:%(lineno)d] %(levelname)s %(message)s')
 # info log
-out_keep = TimedRotatingFileHandler(stdout, 'D', 1, 7)
-out_keep.setFormatter(log_formatter)
-es_logger_out = logging_conf(stdout).getLogger('es-agent_out')
-es_logger_out.addHandler(out_keep)
-
-# error log
-err_keep = TimedRotatingFileHandler(stderr, 'D', 1, 7)
-err_keep.setFormatter(log_formatter)
-es_logger_err = logging_conf(stderr).getLogger('es-agent_err')
-es_logger_err.addHandler(err_keep)
+es_logger_out = logging.getLogger('')
+keep_out = TimedRotatingFileHandler(stdout, 'midnight', 1, 7)
+keep_out.setFormatter(log_formatter)
+es_logger_out.setLevel(logging.INFO)
+es_logger_out.addHandler(keep_out)
 
 q = Queue(10)
 
@@ -162,7 +160,8 @@ def send_to_statsd(statsd_client=None, data=None, gauge=False, timer=False):
             if q.empty():
                 q.put(data)
     except Exception as e:
-        es_logger_err.error(e.__str__())
+        es_logger_out.error(e)
+        print_exc()
 
 
 def timer_to_gauge(data=None):
@@ -174,7 +173,7 @@ def timer_to_gauge(data=None):
             counter_stats_data[k] = round((data[k] - old_stats_data[k]) / 10, 2)
         return counter_stats_data
     else:
-        es_logger_err.error('Queue is empty!')
+        es_logger_out.error('Queue is empty!')
         return data
 
 
@@ -190,7 +189,7 @@ def timer_to_timer_rate(data=None):
         statsd_data_timer = dict(data, **sec_data)
         return statsd_data_timer
     else:
-        es_logger_err.info('No timers data.')
+        es_logger_out.info('No timers data.')
 
 
 def main():
@@ -207,13 +206,15 @@ def main():
             if stats['nodes'][node_id]['host'].startswith(IP):
                 node = stats['nodes'][node_id]
                 if len(sys.argv) == 1:
-                    es_logger_err.error("node found")
+                    es_logger_out.error("node found")
     except requests.exceptions.ConnectTimeout as e:
-        es_logger_err.error(e.__str__())
+        es_logger_out.error(e)
+        print_exc()
         sys.exit(1)
 
     except Exception as e:
-        es_logger_err.error(e.__str__() + "and Unable to load JSON data!")
+        es_logger_out.error(e + "and Unable to load JSON data!")
+        print_exc()
         sys.exit(1)
 
     statsd_host, statsd_port = load_statsd_conf(STATSD_FILE)
@@ -230,20 +231,25 @@ def main():
     stats_data_timer = timer_to_gauge(stats_data_timer)
     stats_data_timer = timer_to_timer_rate(stats_data_timer)
 
-    # send metrics to open-falcon
-    url = load_falcon_conf(OPEN_FALCON)
-    res = send_to_falcon(url, falcon_data)
+    try:
+        # send metrics to open-falcon
+        url = load_falcon_conf(OPEN_FALCON)
+        send_to_falcon(url, falcon_data)
+    except Exception as e:
+        es_logger_out.error(e)
+        print_exc()
+    finally:
+        # send metrics to StatsD
+        send_to_statsd(statsd_client, stats_data_gauge, gauge=True)
+        send_to_statsd(statsd_client, stats_data_timer, timer=True)
+        es_logger_out.info("Delivery %d metrics success! \n", len(falcon_data))
 
-    # send metrics to StatsD
-    send_to_statsd(statsd_client, stats_data_gauge, gauge=True)
-    send_to_statsd(statsd_client, stats_data_timer, timer=True)
-
-    write_log(res.text, len(falcon_data))
+        # write_log(res.text, len(falcon_data))
 
 
 if __name__ == "__main__":
     myDaemon = MyDaemon(pidfile=pidfile,
-                        stdout=stdout,
+                        # stdout=stdout,
                         stderr=stderr)
     args = sys.argv
     if len(args) == 2:
@@ -254,7 +260,7 @@ if __name__ == "__main__":
         elif 'restart' == args[1]:
             myDaemon.restart()
         else:
-            es_logger_err.error('*** Unknown command')
+            es_logger_out.error('*** Unknown command')
             sys.exit(2)
         sys.exit(0)
     else:
