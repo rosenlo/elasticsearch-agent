@@ -38,6 +38,9 @@ WantedBy=multi-user.target
 
 ```
 
+## 相关文档
+[click me](https://github.com/RosenLo/notes/tree/master/ELK/ElasticSearch)
+
 
 ## 相关指标
 
