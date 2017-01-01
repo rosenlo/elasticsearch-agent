@@ -157,8 +157,7 @@ def send_to_statsd(statsd_client=None, data=None, gauge=False, timer=False):
             for k, v in data.items():
                 metric = HOSTNAME + '.' + k
                 statsd_client.gauge(metric, v)
-            if q.empty():
-                q.put(data)
+
     except Exception as e:
         es_logger_out.error(e)
         print_exc()
@@ -170,7 +169,7 @@ def timer_to_gauge(data=None):
         es_logger_out.info('Get a message from the Queue.')
         old_stats_data = q.get()
         for k in data:
-            counter_stats_data[k] = round((data[k] - old_stats_data[k]) / 10, 2)
+            counter_stats_data[k] = round((int(data[k]) - int(old_stats_data[k])) / 10, 2)
         return counter_stats_data
     else:
         es_logger_out.error('Queue is empty!')
@@ -227,9 +226,11 @@ def main():
     # converging of metrics
     falcon_data.extend(falcon_data2)
     stats_data_gauge = dict(stats_data_gauge1, **stats_data_gauge2)
-    stats_data_timer = dict(stats_data_timer1, **stats_data_timer2)
-    stats_data_timer = timer_to_gauge(stats_data_timer)
-    stats_data_timer = timer_to_timer_rate(stats_data_timer)
+    put_data_timer = dict(stats_data_timer1, **stats_data_timer2)
+    stats_data_timer = timer_to_gauge(put_data_timer)
+    if q.empty():
+        q.put(put_data_timer)
+    finally_data_timer = timer_to_timer_rate(stats_data_timer)
 
     try:
         # send metrics to open-falcon
@@ -241,7 +242,7 @@ def main():
     finally:
         # send metrics to StatsD
         send_to_statsd(statsd_client, stats_data_gauge, gauge=True)
-        send_to_statsd(statsd_client, stats_data_timer, timer=True)
+        send_to_statsd(statsd_client, finally_data_timer, timer=True)
         es_logger_out.info("Delivery %d metrics success! \n", len(falcon_data))
 
         # write_log(res.text, len(falcon_data))
