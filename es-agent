@@ -183,6 +183,7 @@ def timer_to_timer_rate(data=None):
             key = k + '.sec'
             try:
                 sec_data[key] = data[k] / data[v]
+                data.pop(k)
             except ZeroDivisionError:
                 sec_data[key] = 0
         statsd_data_timer = dict(data, **sec_data)
