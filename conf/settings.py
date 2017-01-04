@@ -62,6 +62,14 @@ traps2 = [
     "process.mem.share_in_bytes",
     "process.mem.total_virtual_in_bytes",
     "process.open_file_descriptors",
+    "indices.query_cache.memory_size_in_bytes",
+    "indices.query_cache.total_count",
+    "indices.query_cache.hit_count",
+    "indices.query_cache.miss_count",
+    "indices.query_cache.cache_size",
+    "indices.request_cache.memory_size_in_bytes",
+    "indices.request_cache.hit_count",
+    "indices.request_cache.miss_count",
     "indices.docs.count",
     "indices.docs.deleted",
     "indices.flush.total",
@@ -132,6 +140,10 @@ traps2 = [
     "transport.tx_count"
 ]
 
+traps3 = [
+    "indices.count",
+]
+
 GAUGE = [
     "active_primary_shards",
     "active_shards",
@@ -188,6 +200,9 @@ GAUGE = [
     "indices.segments.count",
     "indices.indexing.index_current",
     "indices.segments.memory_in_bytes",
+    "indices.query_cache.memory_size_in_bytes",
+    "indices.query_cache.cache_size",
+    "indices.request_cache.memory_size_in_bytes",
     "thread_pool.index.active",
     "thread_pool.bulk.active",
     "thread_pool.search.active",
@@ -201,6 +216,11 @@ COUNTER = [
     "http.total_opened",
     "indices.docs.count",
     "indices.docs.deleted",
+    "indices.query_cache.hit_count",
+    "indices.query_cache.total_count",
+    "indices.query_cache.miss_count",
+    "indices.request_cache.hit_count",
+    "indices.request_cache.miss_count",
     "indices.flush.total",
     "indices.flush.total_time_in_millis",
     "indices.get.exists_time_in_millis",

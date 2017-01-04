@@ -133,27 +133,15 @@ class MyDaemon(Daemon):
                 time.sleep(1)
 
 
-def write_log(out=None, metrics=None):
-    if out is None:
-        out = []
-    if metrics is None:
-        metrics = []
-    es_logger_out.info("Delivery %d metrics %s! \n", metrics, out)
-
-
 def send_to_falcon(url=None, data=None):
     if data and url:
         res = requests.post(url, data=json.dumps(data))
         return res
 
 
-def send_to_statsd(statsd_client=None, data=None, gauge=False, timer=False):
+def send_to_statsd(statsd_client=None, data=None):
     try:
-        if data and gauge:
-            for k, v in data.items():
-                metric = HOSTNAME + '.' + k
-                statsd_client.gauge(metric, v)
-        if data and timer:
+        if data and statsd_client:
             for k, v in data.items():
                 metric = HOSTNAME + '.' + k
                 statsd_client.gauge(metric, v)
@@ -183,7 +171,6 @@ def timer_to_timer_rate(data=None):
             key = k + '.sec'
             try:
                 sec_data[key] = data[k] / data[v]
-                data.pop(k)
             except ZeroDivisionError:
                 sec_data[key] = 0
         statsd_data_timer = dict(data, **sec_data)
@@ -192,19 +179,21 @@ def timer_to_timer_rate(data=None):
         es_logger_out.info('No timers data.')
 
 
+
 def main():
     # load json data
     node = {}
     try:
         health_res = requests.get("http://{IP}:{PORT}/_cluster/health".format(IP=IP, PORT=PORT), timeout=10)
-        stats_res = requests.get("http://{IP}:{PORT}/_nodes/_local/stats?all=true".format(IP=IP, PORT=PORT), timeout=10)
+        node_stats_res = requests.get("http://{IP}:{PORT}/_nodes/_local/stats?all=true".format(IP=IP, PORT=PORT), timeout=10)
+        #cluster_stats_res = requests.get("http://{IP}:{PORT}/_cluster/stats?all=true".format(IP=IP, PORT=PORT), timeout=10)
         data_time = int(time.time())
         health = health_res.json()
-        stats = stats_res.json()
+        node_stats = node_stats_res.json()
         # only for current node
-        for node_id in stats.get('nodes', {}).keys():
-            if stats['nodes'][node_id]['host'].startswith(IP):
-                node = stats['nodes'][node_id]
+        for node_id in node_stats.get('nodes', {}).keys():
+            if node_stats['nodes'][node_id]['host'].startswith(IP):
+                node = node_stats['nodes'][node_id]
                 if len(sys.argv) == 1:
                     es_logger_out.error("node found")
     except requests.exceptions.ConnectTimeout as e:
@@ -213,7 +202,7 @@ def main():
         sys.exit(1)
 
     except Exception as e:
-        es_logger_out.error(e + "and Unable to load JSON data!")
+        es_logger_out.error(str(e) + "and Unable to load JSON data!")
         print_exc()
         sys.exit(1)
 
@@ -229,9 +218,14 @@ def main():
     stats_data_gauge = dict(stats_data_gauge1, **stats_data_gauge2)
     put_data_timer = dict(stats_data_timer1, **stats_data_timer2)
     stats_data_timer = timer_to_gauge(put_data_timer)
+
+    # use to calcaulate the difference
     if q.empty():
+        es_logger_out.info("Data has been put to the Queue!")
         q.put(put_data_timer)
+
     finally_data_timer = timer_to_timer_rate(stats_data_timer)
+    finally_data = dict(stats_data_gauge, **finally_data_timer)
 
     try:
         # send metrics to open-falcon
@@ -242,11 +236,9 @@ def main():
         print_exc()
     finally:
         # send metrics to StatsD
-        send_to_statsd(statsd_client, stats_data_gauge, gauge=True)
-        send_to_statsd(statsd_client, finally_data_timer, timer=True)
+        send_to_statsd(statsd_client, finally_data)
         es_logger_out.info("Delivery %d metrics success! \n", len(falcon_data))
 
-        # write_log(res.text, len(falcon_data))
 
 
 if __name__ == "__main__":
