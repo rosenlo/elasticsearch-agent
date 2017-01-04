@@ -1,6 +1,7 @@
 ## ElasticSearch-agent
 
-The ElasticSearch-agent is a flexible and powerful open source, collects state information by calling the ElasticSearch API and sends it to StatsD, open-falcon etc...
+The ElasticSearch-agent is a flexible and powerful open source, collects state information by calling the ElasticSearch API
+and sends it to [StatsD](https://github.com/etsy/statsd), [open-falcon](https://github.com/XiaoMi/open-falcon) etc...
 
 ### Requirements
 - python (>= 2.7)
@@ -169,3 +170,4 @@ es.transport.server_open | 为集群通信打开的连接数
 es.transport.tx_count | 在集群通信中发送的包的总数量
 es.transport.tx_size | 在集群通信中发送的数据大小/bytes
 es.unassigned_shards | 那些未分配节点的分片数量
+es.jvm.mem.non_heap_user_in_btyes | 加载类使用的大小
