@@ -8,6 +8,7 @@ File: settings.py
 Created Time: 12/22/16 12:05
 """
 import socket
+import logging.config
 from os import path
 
 BASE_DIR = path.dirname(path.abspath(__file__))
@@ -18,10 +19,68 @@ HOSTNAME = socket.gethostname()
 IP = socket.gethostbyname(HOSTNAME)
 PORT = 9200
 
-# URL = 'http://127.0.0.1:1988/v1/push'
-
 OPEN_FALCON = BASE_DIR + '/open-falcon.yaml'
 STATSD_FILE = BASE_DIR + '/statsd.yaml'
+ES_FILE = BASE_DIR + '/es.yaml'
+
+
+# setting for log
+logging.config.dictConfig({
+    'version': 1,
+    'disable_existing_loggers': True,
+    'formatters': {
+        'verbose': {
+            'format': "[%(asctime)s] [%(name)s] %(filename)s[line:%(lineno)d] %(levelname)s: %(message)s",
+            'datefmt': "%Y-%m-%d %H:%M:%S"
+        },
+        'simple': {
+            'format': '%(levelname)s %(message)s'
+        },
+    },
+    'handlers': {
+        'null': {
+            'level': 'DEBUG',
+            'class': 'logging.NullHandler',
+        },
+        'console': {
+            'level': 'DEBUG',
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose'
+        },
+        'file_stdout': {
+            'level': 'DEBUG',
+            'class': 'cloghandler.ConcurrentRotatingFileHandler',
+            'maxBytes': 1024 * 1024 * 10,
+            'backupCount': 50,
+            # If delay is true,
+            # then file opening is deferred until the first call to emit().
+            'delay': True,
+            'filename': stdout,
+            'formatter': 'verbose'
+        },
+        'file_stderr': {
+            'level': 'DEBUG',
+            'class': 'cloghandler.ConcurrentRotatingFileHandler',
+            'maxBytes': 1024 * 1024 * 10,
+            'backupCount': 50,
+            # If delay is true,
+            # then file opening is deferred until the first call to emit().
+            'delay': True,
+            'filename': stderr,
+            'formatter': 'verbose'
+        }
+    },
+    'loggers': {
+        '': {
+            'handlers': ['file_stdout', 'file_stderr'],
+            'level': 'INFO',
+        },
+        # 'err': {
+        #     'handlers': ['file_stdout', 'file_stderr'],
+        #     'level': 'INFO',
+        # },
+    }
+})
 
 # keys for health page
 traps1 = [
@@ -30,6 +89,8 @@ traps1 = [
     "active_shards",
     "initializing_shards",
     "number_of_data_nodes",
+    "task_max_waiting_in_queue_millis",
+    "number_of_pending_tasks",
     "number_of_nodes",
     "relocating_shards",
     "unassigned_shards"
@@ -52,8 +113,8 @@ traps2 = [
     "thread_pool.bulk.active",
     "thread_pool.bulk.queue",
     "thread_pool.bulk.rejected",
-    "http.current_open",
-    "http.total_opened",
+    # "http.current_open",
+    # "http.total_opened",
     "process.cpu.percent",
     "process.cpu.sys_in_millis",
     "process.cpu.total_in_millis",
@@ -61,7 +122,7 @@ traps2 = [
     "process.mem.resident_in_bytes",
     "process.mem.share_in_bytes",
     "process.mem.total_virtual_in_bytes",
-    "process.open_file_descriptors",
+    # "process.open_file_descriptors",
     "indices.query_cache.memory_size_in_bytes",
     "indices.query_cache.total_count",
     "indices.query_cache.hit_count",
@@ -97,9 +158,9 @@ traps2 = [
     "indices.warmer.total_time_in_millis",
     "indices.segments.memory_in_bytes",
     "indices.segments.count",
-    "jvm.mem.heap_committed_in_bytes",
-    "jvm.mem.heap_max_in_bytes",
-    "jvm.mem.heap_used_in_bytes",
+    # "jvm.mem.heap_committed_in_bytes",
+    # "jvm.mem.heap_max_in_bytes",
+    # "jvm.mem.heap_used_in_bytes",
     "jvm.mem.heap_used_percent",
     # "jvm.mem.non_heap_committed_in_bytes",
     # "jvm.mem.non_heap_used_in_bytes",
@@ -127,13 +188,13 @@ traps2 = [
     "jvm.buffer_pools.mapped.count",
     "jvm.buffer_pools.mapped.total_capacity_in_bytes",
     "jvm.buffer_pools.mapped.used_in_bytes",
-    "os.mem.used_in_bytes",
-    "os.mem.total_in_bytes",
-    "os.mem.free_in_bytes",
+    # "os.mem.used_in_bytes",
+    # "os.mem.total_in_bytes",
+    # "os.mem.free_in_bytes",
     "os.mem.free_percent",
     "os.mem.used_percent",
     "os.cpu_percent",
-    "os.load_average",
+    # "os.load_average",
     "transport.rx_size_in_bytes",
     "transport.rx_count",
     "transport.tx_size_in_bytes",
@@ -148,10 +209,12 @@ GAUGE = [
     "active_primary_shards",
     "active_shards",
     "status",
+    "task_max_waiting_in_queue_millis",
+    "number_of_pending_tasks",
     "number_of_data_nodes",
     "number_of_nodes",
     "unassigned_shards",
-    "http.current_open",
+    # "http.current_open",
     "initializing_shards",
     "jvm.buffer_pools.direct.count",
     "jvm.buffer_pools.direct.total_capacity_in_bytes",
@@ -159,9 +222,9 @@ GAUGE = [
     "jvm.buffer_pools.mapped.count",
     "jvm.buffer_pools.mapped.total_capacity_in_bytes",
     "jvm.buffer_pools.mapped.used_in_bytes",
-    "jvm.mem.heap_committed_in_bytes",
-    "jvm.mem.heap_max_in_bytes",
-    "jvm.mem.heap_used_in_bytes",
+    # "jvm.mem.heap_committed_in_bytes",
+    # "jvm.mem.heap_max_in_bytes",
+    # "jvm.mem.heap_used_in_bytes",
     "jvm.mem.heap_used_percent",
     # "jvm.mem.non_heap_committed_in_bytes",
     # "jvm.mem.non_heap_used_in_bytes",
@@ -182,9 +245,9 @@ GAUGE = [
     "jvm_heap_p_of_RAM",
     "jvm_heap_p_used",
     "jvm.uptime_in_millis",
-    "os.mem.used_in_bytes",
-    "os.mem.total_in_bytes",
-    "os.mem.free_in_bytes",
+    # "os.mem.used_in_bytes",
+    # "os.mem.total_in_bytes",
+    # "os.mem.free_in_bytes",
     "os.mem.free_percent",
     "os.mem.used_percent",
     "os.cpu_percent",
@@ -196,7 +259,7 @@ GAUGE = [
     "process.mem.resident_in_bytes",
     "process.mem.share_in_bytes",
     "process.mem.total_virtual_in_bytes",
-    "process.open_file_descriptors",
+    # "process.open_file_descriptors",
     "indices.segments.count",
     "indices.indexing.index_current",
     "indices.segments.memory_in_bytes",
@@ -213,7 +276,7 @@ GAUGE = [
 ]
 
 COUNTER = [
-    "http.total_opened",
+    # "http.total_opened",
     "indices.docs.count",
     "indices.docs.deleted",
     "indices.query_cache.hit_count",

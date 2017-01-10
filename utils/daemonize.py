@@ -24,8 +24,6 @@ class Daemon(object):
         self.stdout = stdout
         self.stderr = stderr
         self.pidfile = pidfile
-        # self.es_logger_out = logging_conf(stdout).getLogger('es-agent_out')
-        # self.es_logger_out = logging_conf(stderr).getLogger('es-agent_err')
         self.es_logger_out = logging.getLogger(__name__)
 
     def _daemonize(self):
@@ -50,14 +48,8 @@ class Daemon(object):
             sys.exit(1)
 
         # 重定向文件描述符
-        sys.stdout.flush()
         sys.stderr.flush()
-        # si = open(self.stdin, 'r')
-        so = open(self.stdout, 'a+')
-        # se = open(self.stderr, 'a+', 0)
         se = open(self.stderr, 'a+')
-        # os.dup2(si.fileno(), sys.stdin.fileno())
-        # os.dup2(so.fileno(), sys.stdout.fileno())
         os.dup2(se.fileno(), sys.stderr.fileno())
 
         # 注册退出函数，根据文件pid判断是否存在进程

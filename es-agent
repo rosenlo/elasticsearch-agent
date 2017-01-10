@@ -15,7 +15,6 @@ import logging
 import os
 import sys
 import time
-from logging.handlers import TimedRotatingFileHandler
 from multiprocessing import Process, Queue
 from traceback import print_exc
 
@@ -29,12 +28,12 @@ from conf.settings import (
     COUNTER,
     pidfile,
     stderr,
-    stdout,
     HOSTNAME,
     IP,
     PORT,
     STATSD_FILE,
     OPEN_FALCON,
+    ES_FILE,
     SEC_METRIC
 )
 from utils.common import load_yaml_data
@@ -45,16 +44,7 @@ from utils.daemonize import Daemon
     calling the ElasticSearch API and sends it to StatsD and open-falcon.
 """
 
-# log setting
-
-
-log_formatter = logging.Formatter('%(asctime)s %(name)s: %(filename)s[line:%(lineno)d] %(levelname)s %(message)s')
-# info log
 es_logger_out = logging.getLogger('')
-keep_out = TimedRotatingFileHandler(stdout, 'midnight', 1, 7)
-keep_out.setFormatter(log_formatter)
-es_logger_out.setLevel(logging.INFO)
-es_logger_out.addHandler(keep_out)
 
 q = Queue(10)
 
@@ -127,7 +117,7 @@ class MyDaemon(Daemon):
         es_logger_out.info("Daemon started with pid %d! \n", os.getpid())
         while True:
             if int(time.time()) % 10 == 0:
-                p = Process(target=main)
+                p = Process(target=main, args=(int(time.time()),))
                 p.start()
                 p.join()
                 time.sleep(1)
@@ -158,10 +148,9 @@ def timer_to_gauge(data=None):
         old_stats_data = q.get()
         for k in data:
             counter_stats_data[k] = round((int(data[k]) - int(old_stats_data[k])) / 10, 2)
-        return counter_stats_data
     else:
         es_logger_out.error('Queue is empty!')
-        return data
+    return counter_stats_data
 
 
 def timer_to_timer_rate(data=None):
@@ -179,66 +168,114 @@ def timer_to_timer_rate(data=None):
         es_logger_out.info('No timers data.')
 
 
+def indices_total(data=None):
+    indices = {}
+    if data:
+        indices['indices_total'] = data['indices']['count']
+    return indices
 
-def main():
-    # load json data
+
+def health_result(ip, port):
+    res = requests.get("http://{ip}:{port}/_cluster/health".format(ip=ip, port=port), timeout=10)
+    health = res.json()
+    return health
+
+
+def node_result(ip, port):
+    res = requests.get("http://{ip}:{port}/_nodes/_local/stats?all=true".format(ip=ip, port=port), timeout=10)
+    node = res.json()
+    return node
+
+
+def indices_result(ip, port):
+    res = requests.get("http://{ip}:{port}/_cluster/stats?all=true".format(ip=ip, port=port),
+                       timeout=10)
+    indices = res.json()
+    return indices
+
+
+def judge_role():
+    data = load_yaml_data(ES_FILE)
+    has_master = data.get('node.master', '')
+    cluster_name = data.get('cluster.name', '')
+    return has_master, cluster_name
+
+
+def main(data_time):
     node = {}
+    indices = {}
+    falcon_data = []
+    stats_data_gauge1 = {}
+    stats_data_timer1 = {}
     try:
-        health_res = requests.get("http://{IP}:{PORT}/_cluster/health".format(IP=IP, PORT=PORT), timeout=10)
-        node_stats_res = requests.get("http://{IP}:{PORT}/_nodes/_local/stats?all=true".format(IP=IP, PORT=PORT), timeout=10)
-        #cluster_stats_res = requests.get("http://{IP}:{PORT}/_cluster/stats?all=true".format(IP=IP, PORT=PORT), timeout=10)
-        data_time = int(time.time())
-        health = health_res.json()
-        node_stats = node_stats_res.json()
+        data_time = data_time
+
+        # load json data
+        has_master, cluster_name = judge_role()
+        if has_master or not cluster_name:
+            health = health_result(IP, PORT)
+            # only the master to obtains health values
+            falcon_data, stats_data_gauge1, stats_data_timer1 = get_keys(health, traps1, data_time)
+            if data_time % 60 == 0:
+                cluster_stats = indices_result(IP, PORT)
+                indices = indices_total(cluster_stats)
+
+        node_stats = node_result(IP, PORT)
+
         # only for current node
         for node_id in node_stats.get('nodes', {}).keys():
             if node_stats['nodes'][node_id]['host'].startswith(IP):
                 node = node_stats['nodes'][node_id]
                 if len(sys.argv) == 1:
                     es_logger_out.error("node found")
-    except requests.exceptions.ConnectTimeout as e:
+
+        # getting stats values
+        falcon_data2, stats_data_gauge2, stats_data_timer2 = get_keys(node, traps2, data_time)
+
+    except (requests.exceptions.ConnectTimeout,
+            requests.exceptions.ReadTimeout,
+            ) as e:
         es_logger_out.error(e)
         print_exc()
         sys.exit(1)
 
     except Exception as e:
-        es_logger_out.error(str(e) + "and Unable to load JSON data!")
+        es_logger_out.error(str(e) + " and Unable to load JSON data!")
         print_exc()
         sys.exit(1)
 
     statsd_host, statsd_port = load_statsd_conf(STATSD_FILE)
-    statsd_client = statsd.StatsClient(statsd_host, statsd_port, health['cluster_name'])
-
-    # get data of open-falcon and statsd
-    falcon_data, stats_data_gauge1, stats_data_timer1 = get_keys(health, traps1, data_time)  # getting health values
-    falcon_data2, stats_data_gauge2, stats_data_timer2 = get_keys(node, traps2, data_time)  # getting stats values
+    statsd_client = statsd.StatsClient(statsd_host, statsd_port, cluster_name)
 
     # converging of metrics
     falcon_data.extend(falcon_data2)
     stats_data_gauge = dict(stats_data_gauge1, **stats_data_gauge2)
+    stats_data_gauge_append_indices = dict(stats_data_gauge, **indices)
+
+    # use to calculate the difference
     put_data_timer = dict(stats_data_timer1, **stats_data_timer2)
     stats_data_timer = timer_to_gauge(put_data_timer)
-
-    # use to calcaulate the difference
     if q.empty():
         es_logger_out.info("Data has been put to the Queue!")
         q.put(put_data_timer)
 
-    finally_data_timer = timer_to_timer_rate(stats_data_timer)
-    finally_data = dict(stats_data_gauge, **finally_data_timer)
+    if stats_data_timer:
+        # finally data
+        finally_data_timer = timer_to_timer_rate(stats_data_timer)
+        finally_data_statsd = stats_data_gauge_append_indices
+        finally_data = dict(finally_data_statsd, **finally_data_timer)
 
-    try:
-        # send metrics to open-falcon
-        url = load_falcon_conf(OPEN_FALCON)
-        send_to_falcon(url, falcon_data)
-    except Exception as e:
-        es_logger_out.error(e)
-        print_exc()
-    finally:
-        # send metrics to StatsD
-        send_to_statsd(statsd_client, finally_data)
-        es_logger_out.info("Delivery %d metrics success! \n", len(falcon_data))
-
+        try:
+            # send metrics to open-falcon
+            url = load_falcon_conf(OPEN_FALCON)
+            send_to_falcon(url, falcon_data)
+        except Exception as e:
+            es_logger_out.error(e)
+            print_exc()
+        finally:
+            # send metrics to StatsD
+            send_to_statsd(statsd_client, finally_data)
+            es_logger_out.info("Delivery %d metrics success! \n", len(finally_data))
 
 
 if __name__ == "__main__":
