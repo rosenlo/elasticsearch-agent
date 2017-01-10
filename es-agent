@@ -120,7 +120,7 @@ class MyDaemon(Daemon):
                 p = Process(target=main, args=(int(time.time()),))
                 p.start()
                 p.join()
-                time.sleep(1)
+            time.sleep(1)
 
 
 def send_to_falcon(url=None, data=None):
@@ -147,7 +147,7 @@ def timer_to_gauge(data=None):
         es_logger_out.info('Get a message from the Queue.')
         old_stats_data = q.get()
         for k in data:
-            counter_stats_data[k] = round((int(data[k]) - int(old_stats_data[k])) / 10, 2)
+            counter_stats_data[k] = round((float(data[k]) - float(old_stats_data[k])) / 10, 2)
     else:
         es_logger_out.error('Queue is empty!')
     return counter_stats_data
@@ -157,7 +157,7 @@ def timer_to_timer_rate(data=None):
     sec_data = {}
     if data:
         for k, v in SEC_METRIC.items():
-            key = k + '.sec'
+            key = k + '_sec'
             try:
                 sec_data[key] = data[k] / data[v]
             except ZeroDivisionError:
