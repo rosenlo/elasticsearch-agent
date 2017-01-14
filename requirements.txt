@@ -1,0 +1,5 @@
+ConcurrentLogHandler==0.9.1
+pyaml==16.12.2
+PyYAML==3.12
+requests==2.12.4
+statsd==3.2.1
